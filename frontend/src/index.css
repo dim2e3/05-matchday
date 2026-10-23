@@ -9,6 +9,7 @@
   --final: #6b7280;
   --scheduled: #3b82f6;
   --star: #f5b400;
+  --ok: #22c55e;
   --border: #2a2e37;
 }
 
@@ -33,12 +34,138 @@ body {
   padding: 16px;
 }
 
-.app-header h1 {
-  font-size: 1.5rem;
-  margin: 0 0 16px;
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
-.league-tabs {
+.app-header h1 {
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+button.primary {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+button.primary:disabled {
+  opacity: 0.6;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.telegram-connect {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+
+.telegram-error {
+  color: #f87171;
+  font-size: 0.8rem;
+}
+
+.chips {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.chip {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.chip-active {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.search {
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.team-list,
+.notification-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.team-list .team-row {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.notification {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.notification-time {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+
+.notification-status {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.status-sent {
+  color: var(--ok);
+}
+
+.status-failed {
+  color: var(--live);
+}
+
+.status-pending {
+  color: var(--text-dim);
+}
+
+.tabs {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -63,7 +190,7 @@ body {
   border-color: var(--accent);
 }
 
-.scoreboard-status {
+.status-text {
   color: var(--text-dim);
   padding: 24px 8px;
   text-align: center;
@@ -132,7 +259,7 @@ body {
   border-radius: 4px;
 }
 
-.favorite-star {
+.follow-star {
   background: none;
   border: none;
   cursor: pointer;

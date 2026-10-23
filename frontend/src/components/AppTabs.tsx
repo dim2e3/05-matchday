@@ -1,25 +1,24 @@
 import type { Tab } from "../types"
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "nfl", label: "NFL" },
-  { id: "nba", label: "NBA" },
-  { id: "nhl", label: "NHL" },
-  { id: "mlb", label: "MLB" },
-  { id: "favorites", label: "Favorites" },
+  { id: "my-games", label: "My Games" },
+  { id: "teams", label: "Teams" },
+  { id: "notifications", label: "Notifications" },
 ]
 
-interface LeagueTabsProps {
+interface AppTabsProps {
   active: Tab
   onSelect: (tab: Tab) => void
 }
 
-export function LeagueTabs({ active, onSelect }: LeagueTabsProps) {
+export function AppTabs({ active, onSelect }: AppTabsProps) {
   return (
-    <nav className="league-tabs">
+    <nav className="tabs" aria-label="Sections">
       {TABS.map((tab) => (
         <button
           key={tab.id}
           className={tab.id === active ? "tab tab-active" : "tab"}
+          aria-current={tab.id === active ? "page" : undefined}
           onClick={() => onSelect(tab.id)}
         >
           {tab.label}

@@ -2,25 +2,25 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import * as api from "../api"
-import { FavoritesProvider } from "../context/FavoritesContext"
+import { FollowsProvider } from "../context/FollowsContext"
 import { makeGame } from "../test/fixtures"
 import { GameCard } from "./GameCard"
 
 vi.mock("../api")
 const mockedApi = vi.mocked(api)
 
-function renderWithFavorites(ui: React.ReactElement) {
-  return render(<FavoritesProvider>{ui}</FavoritesProvider>)
+function renderWithFollows(ui: React.ReactElement) {
+  return render(<FollowsProvider>{ui}</FollowsProvider>)
 }
 
 describe("GameCard", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockedApi.fetchFavorites.mockResolvedValue([])
+    mockedApi.fetchFollows.mockResolvedValue([])
   })
 
   it("renders both teams, scores, and the live badge", () => {
-    renderWithFavorites(<GameCard game={makeGame()} />)
+    renderWithFollows(<GameCard game={makeGame()} />)
 
     expect(screen.getByText("New England Patriots")).toBeInTheDocument()
     expect(screen.getByText("Seattle Seahawks")).toBeInTheDocument()
@@ -30,36 +30,32 @@ describe("GameCard", () => {
   })
 
   it("shows a league badge when requested", () => {
-    renderWithFavorites(<GameCard game={makeGame()} showLeagueBadge />)
+    renderWithFollows(<GameCard game={makeGame()} showLeagueBadge />)
     expect(screen.getByText("NFL")).toBeInTheDocument()
   })
 
-  it("omits the league badge by default", () => {
-    renderWithFavorites(<GameCard game={makeGame()} />)
-    expect(screen.queryByText("NFL")).not.toBeInTheDocument()
+  it("shows FINAL for finished games", () => {
+    renderWithFollows(
+      <GameCard game={makeGame({ status_state: "post", status_detail: "Final" })} />,
+    )
+    expect(screen.getByText("FINAL")).toBeInTheDocument()
   })
 
-  it("toggles a team's favorite star on click", async () => {
-    mockedApi.addFavorite.mockResolvedValue({
+  it("follows a team from its star", async () => {
+    mockedApi.followTeam.mockResolvedValue({
       league: "nfl",
       team_id: "26",
       team_name: "Seattle Seahawks",
       abbreviation: "SEA",
-      added_at: "2026-09-12T00:00:00Z",
+      logo: null,
+      created_at: "2026-10-23T00:00:00Z",
     })
     const user = userEvent.setup()
+    renderWithFollows(<GameCard game={makeGame()} />)
 
-    renderWithFavorites(<GameCard game={makeGame()} />)
+    await user.click(await screen.findByLabelText("Follow Seattle Seahawks"))
 
-    const star = await screen.findByLabelText("Favorite Seattle Seahawks")
-    await user.click(star)
-
-    expect(await screen.findByLabelText("Unfavorite Seattle Seahawks")).toBeInTheDocument()
-    expect(mockedApi.addFavorite).toHaveBeenCalledWith(
-      "nfl",
-      "26",
-      "Seattle Seahawks",
-      "SEA",
-    )
+    expect(await screen.findByLabelText("Unfollow Seattle Seahawks")).toBeInTheDocument()
+    expect(mockedApi.followTeam).toHaveBeenCalledWith("nfl", "26")
   })
 })

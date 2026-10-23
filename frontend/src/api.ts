@@ -1,57 +1,69 @@
 import type {
-  FavoriteTeam,
-  FavoritesScoreboardResponse,
+  Follow,
   League,
-  ScoreboardResponse,
-  Tab,
+  Me,
+  MyGamesResponse,
+  NotificationItem,
+  TeamInfo,
 } from "./types"
 
-async function handleResponse<T>(res: Response): Promise<T> {
+export class ApiError extends Error {
+  status: number
+
+  constructor(status: number) {
+    super(`Request failed: ${status}`)
+    this.status = status
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, { credentials: "same-origin", ...init })
   if (!res.ok) {
-    throw new Error(`Request failed: ${res.status}`)
+    throw new ApiError(res.status)
+  }
+  if (res.status === 204) {
+    return undefined as T
   }
   const data: unknown = await res.json()
   return data as T
 }
 
-export function fetchScoreboard(
-  tab: Tab,
-): Promise<ScoreboardResponse | FavoritesScoreboardResponse> {
-  return fetch(`/api/scoreboard/${tab}`).then((res) =>
-    handleResponse<ScoreboardResponse | FavoritesScoreboardResponse>(res),
-  )
+export function fetchMyGames(): Promise<MyGamesResponse> {
+  return request<MyGamesResponse>("/api/my-games")
 }
 
-export function fetchFavorites(): Promise<FavoriteTeam[]> {
-  return fetch("/api/favorites").then((res) => handleResponse<FavoriteTeam[]>(res))
+export function fetchTeams(league: League): Promise<TeamInfo[]> {
+  return request<TeamInfo[]>(`/api/teams/${league}`)
 }
 
-export function addFavorite(
-  league: League,
-  teamId: string,
-  teamName: string,
-  abbreviation: string,
-): Promise<FavoriteTeam> {
-  return fetch("/api/favorites", {
+export function fetchFollows(): Promise<Follow[]> {
+  return request<Follow[]>("/api/follows")
+}
+
+export function followTeam(league: League, teamId: string): Promise<Follow> {
+  return request<Follow>("/api/follows", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      league,
-      team_id: teamId,
-      team_name: teamName,
-      abbreviation,
-    }),
-  }).then((res) => handleResponse<FavoriteTeam>(res))
+    body: JSON.stringify({ league, team_id: teamId }),
+  })
 }
 
-export async function removeFavorite(
-  league: League,
-  teamId: string,
-): Promise<void> {
-  const res = await fetch(`/api/favorites/${league}/${teamId}`, {
-    method: "DELETE",
-  })
-  if (!res.ok) {
-    throw new Error(`Request failed: ${res.status}`)
-  }
+export function unfollowTeam(league: League, teamId: string): Promise<void> {
+  return request<void>(`/api/follows/${league}/${teamId}`, { method: "DELETE" })
+}
+
+export function fetchMe(): Promise<Me> {
+  return request<Me>("/api/me")
+}
+
+export function createTelegramLink(): Promise<{ url: string }> {
+  return request<{ url: string }>("/api/telegram/link", { method: "POST" })
+}
+
+export function disconnectTelegram(): Promise<void> {
+  return request<void>("/api/telegram/link", { method: "DELETE" })
+}
+
+export function fetchNotifications(): Promise<NotificationItem[]> {
+  return request<NotificationItem[]>("/api/notifications")
 }

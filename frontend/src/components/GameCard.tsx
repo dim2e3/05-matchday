@@ -1,5 +1,5 @@
 import type { Game } from "../types"
-import { FavoriteStar } from "./FavoriteStar"
+import { FollowStar } from "./FollowStar"
 import { StatusBadge } from "./StatusBadge"
 
 interface GameCardProps {
@@ -21,7 +21,7 @@ export function GameCard({ game, showLeagueBadge = false }: GameCardProps) {
   const league = game.league
 
   return (
-    <div className="game-card">
+    <div className="game-card" data-testid={`game-${game.id}`}>
       <div className="game-card-header">
         {showLeagueBadge && league && (
           <span className="league-badge">{league.toUpperCase()}</span>
@@ -51,11 +51,10 @@ export function GameCard({ game, showLeagueBadge = false }: GameCardProps) {
               />
             )}
             {league && (
-              <FavoriteStar
+              <FollowStar
                 league={league}
                 teamId={competitor.team.id}
                 teamName={competitor.team.name}
-                abbreviation={competitor.team.abbreviation}
               />
             )}
             <span className="team-name">{competitor.team.name}</span>

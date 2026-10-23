@@ -1,5 +1,5 @@
 export type League = "nfl" | "nba" | "nhl" | "mlb"
-export type Tab = League | "favorites"
+export type Tab = "my-games" | "teams" | "notifications"
 
 export type StatusState = "pre" | "in" | "post"
 export type HomeAway = "home" | "away"
@@ -31,22 +31,38 @@ export interface Game {
   league: League | null
 }
 
-export interface ScoreboardResponse {
-  league: League
+export interface MyGamesResponse {
   fetched_at: string
   stale: boolean
   games: Game[]
 }
 
-export interface FavoritesScoreboardResponse {
-  fetched_at: string
-  games: Game[]
+export interface TeamInfo {
+  id: string
+  name: string
+  abbreviation: string
+  logo: string | null
 }
 
-export interface FavoriteTeam {
+export interface Follow {
   league: League
   team_id: string
   team_name: string
   abbreviation: string
-  added_at: string
+  logo: string | null
+  created_at: string
+}
+
+export interface Me {
+  telegram_connected: boolean
+  follows: number
+}
+
+export interface NotificationItem {
+  kind: "kickoff" | "final"
+  league: League
+  text: string
+  status: "pending" | "sent" | "failed"
+  created_at: string
+  sent_at: string | null
 }

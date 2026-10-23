@@ -1,0 +1,94 @@
+# Full local system: `make up` (= docker compose up --build -d --wait).
+# The telemetry stack is added in observability/compose.yaml (included below).
+name: matchday
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+asyncpg://matchday:${POSTGRES_PASSWORD:-matchday}@postgres:5432/matchday
+  ESPN_BASE_URL: ${ESPN_BASE_URL:-http://fake-espn:8000/apis/site/v2/sports}
+  TELEGRAM_API_BASE: ${TELEGRAM_API_BASE:-http://fake-espn:8000/telegram}
+  TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-dev}
+  TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-matchday_alerts_bot}
+  TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-dev-secret}
+  TELEGRAM_MODE: ${TELEGRAM_MODE:-polling}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-10}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: matchday
+      POSTGRES_USER: matchday
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-matchday}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "matchday", "-d", "matchday"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  fake-espn:
+    image: ${IMAGE_PREFIX:-matchday}/fake-espn:${TAG:-local}
+    build: ./fake-espn
+    environment:
+      DRIFT: ${DRIFT:-none}
+    volumes:
+      - ./backend/tests/fixtures:/fixtures:ro
+    ports:
+      - "127.0.0.1:${FAKE_ESPN_PORT:-8090}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    image: ${IMAGE_PREFIX:-matchday}/backend:${TAG:-local}
+    build:
+      context: ./backend
+      args:
+        GIT_SHA: ${GIT_SHA:-dev}
+    environment:
+      <<: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      fake-espn:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/ready', timeout=3)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  worker:
+    image: ${IMAGE_PREFIX:-matchday}/backend:${TAG:-local}
+    command: ["python", "-m", "matchday.worker"]
+    environment:
+      <<: *backend-env
+    depends_on:
+      api:
+        condition: service_healthy  # api runs the migrations
+    restart: unless-stopped
+
+  frontend:
+    image: ${IMAGE_PREFIX:-matchday}/frontend:${TAG:-local}
+    build: ./frontend
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  pgdata:

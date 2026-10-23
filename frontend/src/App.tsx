@@ -1,24 +1,30 @@
 import { useState } from "react"
-import { LeagueTabs } from "./components/LeagueTabs"
-import { Scoreboard } from "./components/Scoreboard"
-import { FavoritesProvider } from "./context/FavoritesContext"
+import { AppTabs } from "./components/AppTabs"
+import { MyGames } from "./components/MyGames"
+import { Notifications } from "./components/Notifications"
+import { TeamPicker } from "./components/TeamPicker"
+import { TelegramConnect } from "./components/TelegramConnect"
+import { FollowsProvider } from "./context/FollowsContext"
 import type { Tab } from "./types"
 
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>("nfl")
+  const [activeTab, setActiveTab] = useState<Tab>("my-games")
 
   return (
-    <FavoritesProvider>
+    <FollowsProvider>
       <div className="app">
         <header className="app-header">
-          <h1>ScoreFeed</h1>
+          <h1>MatchDay</h1>
+          <TelegramConnect />
         </header>
-        <LeagueTabs active={activeTab} onSelect={setActiveTab} />
+        <AppTabs active={activeTab} onSelect={setActiveTab} />
         <main>
-          <Scoreboard tab={activeTab} />
+          {activeTab === "my-games" && <MyGames onFindTeams={() => setActiveTab("teams")} />}
+          {activeTab === "teams" && <TeamPicker />}
+          {activeTab === "notifications" && <Notifications />}
         </main>
       </div>
-    </FavoritesProvider>
+    </FollowsProvider>
   )
 }
 
