@@ -40,9 +40,12 @@ jobs:
           uv --directory alert-bridge run ruff check .
           uv --directory alert-bridge run python -m pytest -q
       - name: Migrations match the models
+        # Fresh database: the test suite leaves its own tables in matchday_test.
         env:
-          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+          PGPASSWORD: matchday
+          DATABASE_URL: postgresql+asyncpg://matchday:matchday@localhost:5432/matchday_migrations
         run: |
+          psql -h localhost -U matchday -d matchday_test -c 'CREATE DATABASE matchday_migrations'
           uv --directory backend run alembic upgrade head
           uv --directory backend run alembic check
 
