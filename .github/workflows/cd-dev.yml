@@ -59,6 +59,12 @@ jobs:
           file: fake-espn/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.prefix }}/fake-espn:${{ steps.meta.outputs.tag }}
+      - name: alert-bridge
+        uses: docker/build-push-action@v6
+        with:
+          context: alert-bridge
+          push: true
+          tags: ${{ steps.meta.outputs.prefix }}/alert-bridge:${{ steps.meta.outputs.tag }}
 
   deploy-dev:
     needs: build

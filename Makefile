@@ -1,4 +1,4 @@
-.PHONY: up down logs test test-backend test-backend-pg test-frontend lint e2e demo-live demo-final demo-drift demo-reset
+.PHONY: up down logs test test-backend test-bridge test-backend-pg test-frontend lint e2e demo-live demo-final demo-drift demo-reset
 
 COMPOSE := docker compose
 FAKE := http://127.0.0.1:8090
@@ -12,10 +12,13 @@ down:
 logs:
 	$(COMPOSE) logs -f api worker
 
-test: test-backend test-frontend
+test: test-backend test-bridge test-frontend
 
 test-backend:
 	uv --directory backend run pytest -q
+
+test-bridge:
+	uv --directory alert-bridge run python -m pytest -q
 
 # Same suite against a throwaway Postgres (what CI does).
 PG_TEST := postgresql+asyncpg://matchday:matchday@127.0.0.1:55432/matchday_test

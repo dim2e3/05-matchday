@@ -1,0 +1,110 @@
+# On-call agent: woken by alert-bridge (repository_dispatch "incident") when a Grafana
+# user-impact alert fires. Claude Code investigates with the collected telemetry, reproduces
+# the bug in a test, fixes it, and this workflow opens a PR labelled "incident".
+# The PR then goes through the normal path: CI → review → merge → CD to dev → manual prod.
+name: On-call agent
+
+on:
+  repository_dispatch:
+    types: [incident]
+  workflow_dispatch:
+    inputs:
+      context:
+        description: "Incident context (markdown), for a manual run"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oncall
+  cancel-in-progress: false
+
+jobs:
+  respond:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Payload values go through env vars, never inline into scripts (injection safety).
+      RAW_INCIDENT_ID: ${{ github.event.client_payload.incident_id || github.run_id }}
+      CONTEXT: ${{ github.event.client_payload.context || inputs.context }}
+      SUMMARY: ${{ github.event.client_payload.summary || 'manual on-call run' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A PAT, so the pushed branch and PR trigger CI (GITHUB_TOKEN pushes do not).
+          token: ${{ secrets.ONCALL_GH_TOKEN }}
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.30"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Incident folder
+        id: incident
+        run: |
+          id=$(printf '%s' "$RAW_INCIDENT_ID" | tr -cd 'A-Za-z0-9_-' | cut -c1-80)
+          dir="docs/incidents/$id"
+          mkdir -p "$dir"
+          printf '%s\n' "$CONTEXT" > "$dir/context.md"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          uv --directory backend sync --frozen -q
+
+      - name: Claude Code investigates and fixes
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          INCIDENT_DIR: ${{ steps.incident.outputs.dir }}
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          prompt=$(sed "s#{INCIDENT_DIR}#$INCIDENT_DIR#g" docs/oncall-prompt.md)
+          claude -p "$prompt" \
+            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(uv --directory backend run pytest:*),Bash(uv --directory backend run ruff:*),Bash(git diff:*),Bash(git status:*),Bash(git log:*),Bash(ls:*),Bash(cat:*),Bash(python3:*)" \
+            --disallowedTools "Bash(git push:*),Bash(git commit:*),Bash(curl:*),Bash(gh:*)" \
+            --max-turns 60 \
+            --output-format text > "$INCIDENT_DIR/agent-output.txt"
+          test -s "$INCIDENT_DIR/response.md" || cp "$INCIDENT_DIR/agent-output.txt" "$INCIDENT_DIR/response.md"
+          status=$(grep -o 'STATUS: [A-Z_]*' "$INCIDENT_DIR/response.md" | tail -1 | cut -d' ' -f2)
+          echo "STATUS=${status:-ESCALATE}" >> "$GITHUB_ENV"
+
+      - name: Tests must pass
+        if: env.STATUS == 'FIXED'
+        run: |
+          uv --directory backend run ruff check .
+          uv --directory backend run pytest -q
+
+      - name: Guard rails — the agent only changed allowed paths
+        run: |
+          if git status --porcelain | awk '{print $2}' | grep -vE '^(backend/|docs/incidents/)'; then
+            echo "agent changed files outside backend/ and docs/incidents/" && exit 1
+          fi
+
+      - name: Open PR (fixed) or issue (needs a human)
+        env:
+          GH_TOKEN: ${{ secrets.ONCALL_GH_TOKEN }}
+          ID: ${{ steps.incident.outputs.id }}
+          DIR: ${{ steps.incident.outputs.dir }}
+        run: |
+          git config user.name "matchday-oncall-agent"
+          git config user.email "oncall-agent@users.noreply.github.com"
+          gh label create incident --color B60205 --description "Opened by the on-call agent" 2>/dev/null || true
+          branch="incident/$ID"
+          git switch -c "$branch"
+          git add backend docs/incidents
+          git commit -qm "fix(incident): $SUMMARY" -m "Incident $ID, status $STATUS. See $DIR/response.md."
+          git push -u origin "$branch"
+          if [ "$STATUS" = "FIXED" ]; then
+            gh pr create --title "fix(incident): $SUMMARY" --label incident \
+              --body-file "$DIR/response.md" --base main --head "$branch"
+          else
+            gh issue create --title "incident ($STATUS): $SUMMARY" --label incident \
+              --body "$(cat "$DIR/response.md")"$'\n\n'"Context and notes: branch \`$branch\`, folder \`$DIR\`."
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### On-call: ${STATUS:-not run}" >> "$GITHUB_STEP_SUMMARY"
+          cat "${{ steps.incident.outputs.dir }}/response.md" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true

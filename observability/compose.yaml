@@ -67,7 +67,23 @@ services:
       timeout: 3s
       retries: 24
 
+  alert-bridge:
+    image: ${IMAGE_PREFIX:-matchday}/alert-bridge:${BRIDGE_TAG:-local}
+    build: ../alert-bridge
+    environment:
+      GRAFANA_URL: http://grafana:3000
+      GRAFANA_PASSWORD: ${GRAFANA_BRIDGE_PASSWORD:-}
+      ALERT_WEBHOOK_TOKEN: ${ALERT_WEBHOOK_TOKEN:-dev-alert-token}
+      GITHUB_REPOSITORY: ${GITHUB_REPOSITORY:-}
+      GITHUB_DISPATCH_TOKEN: ${GITHUB_DISPATCH_TOKEN:-} # empty: dry-run, incidents only
+    volumes:
+      - incidents:/data/incidents
+    ports:
+      - "127.0.0.1:${BRIDGE_PORT:-8095}:8000"
+    restart: unless-stopped
+
 volumes:
+  incidents:
   prometheus:
   loki:
   tempo:

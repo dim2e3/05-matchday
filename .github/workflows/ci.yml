@@ -34,6 +34,11 @@ jobs:
       - run: uv --directory backend sync --frozen
       - run: uv --directory backend run ruff check .
       - run: uv --directory backend run pytest -q
+      - name: alert-bridge tests
+        run: |
+          uv --directory alert-bridge sync --frozen
+          uv --directory alert-bridge run ruff check .
+          uv --directory alert-bridge run python -m pytest -q
       - name: Migrations match the models
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}

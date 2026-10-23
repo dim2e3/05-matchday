@@ -89,10 +89,18 @@ jobs:
           TARGET: ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
           ALERT_WEBHOOK_TOKEN: ${{ secrets.ALERT_WEBHOOK_TOKEN }}
+          GITHUB_DISPATCH_TOKEN: ${{ secrets.ONCALL_GH_TOKEN }}
         run: |
-          printf 'GRAFANA_HOST=%s\nGRAFANA_ADMIN_PASSWORD=%s\nALERT_WEBHOOK_TOKEN=%s\nGITHUB_REPOSITORY=%s\n' \
-            "${{ vars.GRAFANA_HOST }}" "$GRAFANA_ADMIN_PASSWORD" "$ALERT_WEBHOOK_TOKEN" \
-            "${{ github.repository }}" > ops.env
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          {
+            echo "GRAFANA_HOST=${{ vars.GRAFANA_HOST }}"
+            echo "GRAFANA_ADMIN_PASSWORD=$GRAFANA_ADMIN_PASSWORD"
+            echo "ALERT_WEBHOOK_TOKEN=$ALERT_WEBHOOK_TOKEN"
+            echo "GITHUB_REPOSITORY=${{ github.repository }}"
+            echo "GITHUB_DISPATCH_TOKEN=$GITHUB_DISPATCH_TOKEN"
+            echo "IMAGE_PREFIX=ghcr.io/$owner/matchday"
+            echo "BRIDGE_TAG=$TAG"
+          } > ops.env
           rsync -a --delete -e ssh observability/ "$TARGET:/opt/matchday/ops/observability/"
           scp -q deploy/compose.ops.override.yaml "$TARGET:/opt/matchday/ops/observability/"
           scp -q ops.env "$TARGET:/opt/matchday/ops/observability/.env"

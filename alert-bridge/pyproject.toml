@@ -1,0 +1,26 @@
+[project]
+name = "alert-bridge"
+version = "0.1.0"
+description = "Grafana alert webhook -> telemetry context -> GitHub repository_dispatch (on-call agent)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "httpx>=0.27",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.7",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008"]

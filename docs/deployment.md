@@ -55,7 +55,11 @@ automatically** to the previous good tag if health or smoke fails.
 2. **Deploy key**: `ssh-keygen -t ed25519 -f matchday_deploy -N ''`, append the `.pub` to
    `~/.ssh/authorized_keys` on the host.
 3. **GitHub repo settings**
-   - Secrets (repo): `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY` (private key).
+   - Secrets (repo): `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY` (private key);
+     `GRAFANA_ADMIN_PASSWORD`; `ALERT_WEBHOOK_TOKEN` (`openssl rand -hex 32`, Grafana → bridge);
+     `ANTHROPIC_API_KEY` (on-call agent); `ONCALL_GH_TOKEN` — fine-grained PAT for this repo
+     with *Contents*, *Pull requests*, *Issues*: read/write (bridge dispatch + agent PR; a PAT so
+     the PR triggers CI).
    - Variables (repo): `PROD_HOST=matchday.<ip>.sslip.io`, `DEV_HOST=dev.<ip>.sslip.io`,
      `GRAFANA_HOST=grafana.<ip>.sslip.io`, `ACME_EMAIL`.
    - Environment `dev`: variable `PUBLIC_HOST=dev.<ip>.sslip.io`; secret `POSTGRES_PASSWORD`.

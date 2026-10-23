@@ -15,6 +15,14 @@ services:
     networks: [default, edge]
   prometheus:
     ports: !reset []
+  alert-bridge:
+    build: !reset null
+    image: ${IMAGE_PREFIX:?set in .env}/alert-bridge:${BRIDGE_TAG:?set in .env}
+    environment:
+      GRAFANA_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GITHUB_REPOSITORY: ${GITHUB_REPOSITORY}
+      GITHUB_DISPATCH_TOKEN: ${GITHUB_DISPATCH_TOKEN}
+    ports: !reset []
 
 networks:
   ops:
