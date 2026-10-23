@@ -1,7 +1,8 @@
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 
-from .schemas import Competitor, Game, Team
+from .schemas import Competitor, Game, Team, TeamInfo
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +55,43 @@ def _normalize_event(raw_event: dict, league: str) -> Game | None:
         return None
 
 
-def normalize_scoreboard(raw: dict, league: str) -> list[Game]:
+@dataclass
+class ParseResult:
+    games: list[Game]
+    dropped: int
+
+
+def parse_scoreboard(raw: dict, league: str) -> ParseResult:
     events = raw.get("events", [])
     games: list[Game] = []
     for raw_event in events:
         game = _normalize_event(raw_event, league)
         if game is not None:
             games.append(game)
-    return games
+    return ParseResult(games=games, dropped=len(events) - len(games))
+
+
+def normalize_scoreboard(raw: dict, league: str) -> list[Game]:
+    return parse_scoreboard(raw, league).games
+
+
+def normalize_teams(raw: dict) -> list[TeamInfo]:
+    """ESPN `/teams` → `sports[0].leagues[0].teams[].team`."""
+    teams: list[TeamInfo] = []
+    for sport in raw.get("sports", []):
+        for league in sport.get("leagues", []):
+            for entry in league.get("teams", []):
+                raw_team = entry.get("team", {})
+                if "id" not in raw_team:
+                    continue
+                logos = raw_team.get("logos") or []
+                teams.append(
+                    TeamInfo(
+                        id=str(raw_team["id"]),
+                        name=raw_team.get("displayName") or raw_team.get("name") or "Unknown",
+                        abbreviation=raw_team.get("abbreviation") or "",
+                        logo=logos[0].get("href") if logos else raw_team.get("logo"),
+                    )
+                )
+    teams.sort(key=lambda t: t.name)
+    return teams

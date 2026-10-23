@@ -82,7 +82,10 @@ As a fan I get a Telegram message at kickoff and at the final.
 - [ ] On `pre → in` it enqueues `kickoff` for every connected user following either team:
       "🟢 Kickoff: BOS @ NYR (NHL)".
 - [ ] On `in → post` it enqueues `final`: "🏁 Final: BOS 3 – 2 NYR (NHL)".
-- [ ] A game first seen already `post` does not notify (no back-fill after downtime > 6 h).
+- [ ] On `pre → post` (live phase missed between two polls) it enqueues only `final`.
+- [ ] A game first seen by the worker never notifies, and a snapshot older than 6 h is not
+      trusted (no back-fill after downtime).
+- [ ] Only users who follow either team **and** have Telegram connected are notified.
 - [ ] Each (user, game, kind) is delivered at most once, even across worker restarts.
 - [ ] Telegram failures retry with backoff (3 attempts); then status `failed`.
 

@@ -3,7 +3,7 @@ import pytest
 import respx
 from httpx import AsyncClient
 
-from scoreboard_api import config
+from matchday import config
 
 pytestmark = pytest.mark.asyncio
 
@@ -90,47 +90,3 @@ async def test_get_league_scoreboard_upstream_failure(client: AsyncClient) -> No
     assert res.status_code == 502
     assert res.json()["detail"]["error"] == "upstream_unavailable"
 
-
-@respx.mock
-async def test_favorites_scoreboard_filters_by_favorite_team(
-    client: AsyncClient,
-) -> None:
-    respx.get(_espn_url("nfl")).mock(
-        return_value=httpx.Response(200, json=RAW_NFL_EVENT)
-    )
-    for league in ("nba", "nhl", "mlb"):
-        respx.get(_espn_url(league)).mock(
-            return_value=httpx.Response(200, json={"events": []})
-        )
-
-    await client.post(
-        "/api/favorites",
-        json={
-            "league": "nfl",
-            "team_id": "26",
-            "team_name": "Seattle Seahawks",
-            "abbreviation": "SEA",
-        },
-    )
-
-    res = await client.get("/api/scoreboard/favorites")
-
-    assert res.status_code == 200
-    body = res.json()
-    assert len(body["games"]) == 1
-    assert body["games"][0]["league"] == "nfl"
-
-
-@respx.mock
-async def test_favorites_scoreboard_empty_when_no_favorites(
-    client: AsyncClient,
-) -> None:
-    for league in config.LEAGUES:
-        respx.get(_espn_url(league)).mock(
-            return_value=httpx.Response(200, json={"events": []})
-        )
-
-    res = await client.get("/api/scoreboard/favorites")
-
-    assert res.status_code == 200
-    assert res.json()["games"] == []

@@ -41,23 +41,53 @@ class ScoreboardResponse(BaseModel):
     games: list[Game]
 
 
-class FavoritesScoreboardResponse(BaseModel):
+class MyGamesResponse(BaseModel):
     fetched_at: datetime
+    stale: bool = False
     games: list[Game]
 
 
-class FavoriteTeamIn(BaseModel):
+class TeamInfo(BaseModel):
+    id: str
+    name: str
+    abbreviation: str
+    logo: str | None = None
+
+
+League = Literal["nfl", "nba", "nhl", "mlb"]
+
+
+class FollowIn(BaseModel):
+    league: League
+    team_id: str
+
+
+class FollowOut(BaseModel):
     league: str
     team_id: str
     team_name: str
     abbreviation: str
+    logo: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
-class FavoriteTeamOut(BaseModel):
+class MeOut(BaseModel):
+    telegram_connected: bool
+    follows: int
+
+
+class TelegramLinkOut(BaseModel):
+    url: str
+
+
+class NotificationOut(BaseModel):
+    kind: str
     league: str
-    team_id: str
-    team_name: str
-    abbreviation: str
-    added_at: datetime
+    text: str
+    status: str
+    created_at: datetime
+    sent_at: datetime | None = None
 
     model_config = {"from_attributes": True}
