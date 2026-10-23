@@ -1,0 +1,176 @@
+:root {
+  color-scheme: light dark;
+  --bg: #0f1115;
+  --card-bg: #1a1d24;
+  --text: #e8e9ec;
+  --text-dim: #9aa0ab;
+  --accent: #3b82f6;
+  --live: #ef4444;
+  --final: #6b7280;
+  --scheduled: #3b82f6;
+  --star: #f5b400;
+  --border: #2a2e37;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.app-header h1 {
+  font-size: 1.5rem;
+  margin: 0 0 16px;
+}
+
+.league-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.tab {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.tab-active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.scoreboard-status {
+  color: var(--text-dim);
+  padding: 24px 8px;
+  text-align: center;
+}
+
+.game-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.game-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.game-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+}
+
+.league-badge {
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.status-badge {
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.status-live {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--live);
+}
+
+.status-final {
+  background: rgba(107, 114, 128, 0.15);
+  color: var(--final);
+}
+
+.status-scheduled {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--scheduled);
+}
+
+.game-detail {
+  color: var(--text-dim);
+}
+
+.team-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.team-logo {
+  border-radius: 4px;
+}
+
+.favorite-star {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--star);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0;
+  width: 20px;
+}
+
+.team-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.team-record {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+.team-score {
+  font-weight: 700;
+  min-width: 24px;
+  text-align: right;
+}
+
+.game-venue {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  margin-top: 6px;
+}
+
+.error-banner {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+}

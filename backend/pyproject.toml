@@ -1,0 +1,38 @@
+[project]
+name = "scoreboard-api"
+version = "0.1.0"
+description = "ScoreFeed backend: FastAPI service proxying ESPN scoreboards and storing favorite teams"
+readme = "README.md"
+authors = [
+    { name = "dmitriytrunov", email = "dim2e3@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "httpx>=0.27",
+    "sqlalchemy>=2.0",
+    "aiosqlite>=0.20",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "respx>=0.21",
+    "ruff>=0.7",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.30,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "scoreboard_api"
+module-root = "src"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff.lint]
+ignore = ["B008"]  # FastAPI's Depends() is idiomatically used as an argument default

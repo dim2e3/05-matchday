@@ -1,0 +1,36 @@
+name: User story
+description: A user-facing story with testable acceptance criteria
+labels: [story]
+body:
+  - type: input
+    id: story-id
+    attributes:
+      label: Story id
+      description: Matches docs/product/spec.md, e.g. S3
+    validations:
+      required: true
+  - type: textarea
+    id: story
+    attributes:
+      label: Story
+      placeholder: As a fan I … so that …
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Given / When / Then, one checkbox each
+      value: |
+        - [ ] Given … when … then …
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+  - type: dropdown
+    id: role
+    attributes:
+      label: Owning role
+      options: [backend-dev, frontend-dev, devops, qa, full-stack]

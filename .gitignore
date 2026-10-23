@@ -1,0 +1,21 @@
+# backend
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.db
+backend/.pytest_cache/
+
+# frontend
+frontend/node_modules/
+frontend/dist/
+
+# e2e
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+
+# general
+.env
+**/__pycache__/
+**/.ruff_cache/
+**/.pytest_cache/
