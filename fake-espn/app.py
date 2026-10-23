@@ -13,6 +13,7 @@ import asyncio
 import copy
 import json
 import os
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -28,9 +29,10 @@ app = FastAPI(title="fake-espn")
 
 class State:
     def __init__(self) -> None:
-        # Never reset: a running worker keeps its getUpdates offset across resets,
-        # so update ids must keep increasing like Telegram's do.
-        self.next_update_id = 1
+        # Never reset, and seeded from the clock: a running worker keeps its getUpdates
+        # offset across resets and fake-espn restarts, so ids must only ever increase,
+        # like Telegram's do.
+        self.next_update_id = int(time.time() * 1000)
         self.reset()
 
     def reset(self) -> None:
