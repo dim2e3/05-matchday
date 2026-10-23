@@ -11,7 +11,9 @@ x-backend-env: &backend-env
   TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-dev-secret}
   TELEGRAM_MODE: ${TELEGRAM_MODE:-polling}
   COOKIE_SECURE: ${COOKIE_SECURE:-false}
-  POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-10}
+  # Short intervals locally so demos and e2e react within seconds.
+  POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-3}
+  SCOREBOARD_CACHE_TTL_SECONDS: ${SCOREBOARD_CACHE_TTL_SECONDS:-2}
 
 services:
   postgres:

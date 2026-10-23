@@ -11,7 +11,7 @@ LEAGUES: dict[str, tuple[str, str]] = {
     "mlb": ("baseball", "mlb"),
 }
 
-CACHE_TTL_SECONDS = 15
+CACHE_TTL_SECONDS = float(os.environ.get("SCOREBOARD_CACHE_TTL_SECONDS", "15"))
 TEAMS_CACHE_TTL_SECONDS = 24 * 3600
 ESPN_TIMEOUT_SECONDS = 5.0
 ESPN_USER_AGENT = "matchday-alerts/0.1 (+https://github.com/)"

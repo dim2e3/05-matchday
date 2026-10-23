@@ -28,6 +28,9 @@ app = FastAPI(title="fake-espn")
 
 class State:
     def __init__(self) -> None:
+        # Never reset: a running worker keeps its getUpdates offset across resets,
+        # so update ids must keep increasing like Telegram's do.
+        self.next_update_id = 1
         self.reset()
 
     def reset(self) -> None:
@@ -35,7 +38,6 @@ class State:
         self.overrides: dict[str, dict] = {}  # game_id -> {state, home_score, away_score}
         self.messages: list[dict] = []
         self.updates: list[dict] = []
-        self.next_update_id = 1
 
 
 state = State()

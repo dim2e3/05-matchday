@@ -1,4 +1,4 @@
-.PHONY: up down logs test test-backend test-frontend lint e2e demo-live demo-final demo-drift demo-reset
+.PHONY: up down logs test test-backend test-backend-pg test-frontend lint e2e demo-live demo-final demo-drift demo-reset
 
 COMPOSE := docker compose
 FAKE := http://127.0.0.1:8090
@@ -16,6 +16,15 @@ test: test-backend test-frontend
 
 test-backend:
 	uv --directory backend run pytest -q
+
+# Same suite against a throwaway Postgres (what CI does).
+PG_TEST := postgresql+asyncpg://matchday:matchday@127.0.0.1:55432/matchday_test
+test-backend-pg:
+	docker run -d --rm --name md-pg-test -e POSTGRES_USER=matchday -e POSTGRES_PASSWORD=matchday \
+	  -e POSTGRES_DB=matchday_test -p 127.0.0.1:55432:5432 postgres:16-alpine >/dev/null
+	until docker exec md-pg-test pg_isready -U matchday -q; do sleep 1; done
+	TEST_DATABASE_URL=$(PG_TEST) uv --directory backend run pytest -q; \
+	  status=$$?; docker rm -f md-pg-test >/dev/null; exit $$status
 
 test-frontend:
 	npm --prefix frontend test
