@@ -33,11 +33,11 @@ services:
 
   fake-espn:
     image: ${IMAGE_PREFIX:-matchday}/fake-espn:${TAG:-local}
-    build: ./fake-espn
+    build:
+      context: .
+      dockerfile: fake-espn/Dockerfile
     environment:
       DRIFT: ${DRIFT:-none}
-    volumes:
-      - ./backend/tests/fixtures:/fixtures:ro
     ports:
       - "127.0.0.1:${FAKE_ESPN_PORT:-8090}:8000"
     healthcheck:

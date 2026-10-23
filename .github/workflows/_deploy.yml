@@ -1,0 +1,120 @@
+# Reusable: deploy an already-built image tag to one environment on the EC2 host.
+# Used by cd-dev.yml (automatic) and deploy-prod.yml (manual, approval required).
+name: deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true # dev | production
+      tag:
+        type: string
+        required: true # sha-<short>
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.tag }} to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: https://${{ vars.PUBLIC_HOST }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      ENV_NAME: ${{ inputs.environment == 'production' && 'prod' || 'dev' }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SSH setup
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Write environment file
+        env:
+          IS_DEV: ${{ env.ENV_NAME == 'dev' }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+          TELEGRAM_BOT_USERNAME: ${{ vars.TELEGRAM_BOT_USERNAME }}
+        run: |
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          {
+            echo "IMAGE_PREFIX=ghcr.io/$owner/matchday"
+            echo "DEPLOY_ENV=$ENV_NAME"
+            echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD"
+            echo "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318"
+            if [ "$IS_DEV" = "true" ]; then
+              # dev runs against fake-espn (ESPN + Telegram stand-in) for the incident demo.
+              echo "COMPOSE_PROFILES=fake"
+              echo "ESPN_BASE_URL=http://fake-espn:8000/apis/site/v2/sports"
+              echo "TELEGRAM_API_BASE=http://fake-espn:8000/telegram"
+              echo "TELEGRAM_BOT_TOKEN=dev"
+              echo "TELEGRAM_BOT_USERNAME=matchday_dev_bot"
+              echo "TELEGRAM_WEBHOOK_SECRET=dev-secret"
+              echo "TELEGRAM_MODE=polling"
+              echo "POLL_INTERVAL_SECONDS=5"
+              echo "SCOREBOARD_CACHE_TTL_SECONDS=3"
+            else
+              echo "ESPN_BASE_URL=https://site.api.espn.com/apis/site/v2/sports"
+              echo "TELEGRAM_API_BASE=https://api.telegram.org"
+              echo "TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN"
+              echo "TELEGRAM_BOT_USERNAME=$TELEGRAM_BOT_USERNAME"
+              echo "TELEGRAM_WEBHOOK_SECRET=$TELEGRAM_WEBHOOK_SECRET"
+              echo "TELEGRAM_MODE=webhook"
+            fi
+          } > app.env
+
+      - name: Edge proxy (Caddy) up to date
+        env:
+          TARGET: ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}
+        run: |
+          printf 'PROD_HOST=%s\nDEV_HOST=%s\nGRAFANA_HOST=%s\nACME_EMAIL=%s\n' \
+            "${{ vars.PROD_HOST }}" "${{ vars.DEV_HOST }}" "${{ vars.GRAFANA_HOST }}" \
+            "${{ vars.ACME_EMAIL }}" > edge.env
+          scp -q deploy/compose.edge.yaml deploy/Caddyfile "$TARGET:/opt/matchday/edge/"
+          scp -q edge.env "$TARGET:/opt/matchday/edge/.env"
+          ssh "$TARGET" 'cd /opt/matchday/edge && docker compose -p matchday-edge -f compose.edge.yaml up -d --wait \
+            && docker compose -p matchday-edge -f compose.edge.yaml exec -T caddy caddy reload --config /etc/caddy/Caddyfile'
+
+      - name: Ship files and deploy
+        env:
+          TARGET: ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}
+        run: |
+          dir=/opt/matchday/$ENV_NAME
+          scp -q deploy/compose.app.yaml deploy/deploy.sh "$TARGET:$dir/"
+          scp -q app.env "$TARGET:$dir/.env"
+          ssh "$TARGET" "chmod 600 $dir/.env && bash $dir/deploy.sh $ENV_NAME $TAG"
+
+      - name: Register Telegram webhook
+        if: env.ENV_NAME == 'prod'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+        run: |
+          curl -fsS -o /dev/null "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
+            --data-urlencode "url=https://${{ vars.PUBLIC_HOST }}/api/telegram/webhook" \
+            --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
+            --data-urlencode 'allowed_updates=["message"]'
+
+      - name: Public smoke test
+        run: |
+          for _ in $(seq 20); do
+            sha=$(curl -fsS "https://${{ vars.PUBLIC_HOST }}/api/version" | jq -r .sha) && \
+              [ "sha-$sha" = "$TAG" ] && echo "live: $TAG" && exit 0
+            sleep 3
+          done
+          echo "public URL does not serve $TAG" && exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### ${{ inputs.environment }}: \`$TAG\` — ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://${{ vars.PUBLIC_HOST }}" >> "$GITHUB_STEP_SUMMARY"

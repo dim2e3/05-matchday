@@ -1,0 +1,38 @@
+# Manual production deploy. Promotes an image tag that is already built (and running on dev).
+# Rollback: run this again with the previous tag (see `previous_good_tag` on the host or the
+# deploy history in docs/deployment.md). The "production" environment requires approval.
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to deploy, e.g. sha-1a2b3c4 (copy from the CD (dev) run)"
+        required: true
+        type: string
+
+jobs:
+  check:
+    name: Tag exists in GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          prefix=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/matchday
+          for image in backend frontend; do
+            docker manifest inspect "$prefix/$image:${{ inputs.tag }}" >/dev/null
+          done
+
+  deploy:
+    needs: check
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      environment: production
+      tag: ${{ inputs.tag }}
+    secrets: inherit

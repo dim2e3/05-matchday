@@ -1,0 +1,4 @@
+# Root context is only used by fake-espn/Dockerfile.
+*
+!fake-espn/app.py
+!backend/tests/fixtures
