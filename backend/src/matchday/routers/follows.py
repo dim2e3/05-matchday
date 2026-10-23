@@ -1,8 +1,10 @@
 """Teams, follows and My Games (S2, S3)."""
 
+import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from opentelemetry import trace
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +16,7 @@ from ..models import Follow, User
 from ..schemas import FollowIn, FollowOut, League, MyGamesResponse, TeamInfo
 
 router = APIRouter(prefix="/api", tags=["follows"])
+logger = logging.getLogger("matchday.my_games")
 
 
 def _upstream_unavailable(league: str) -> HTTPException:
@@ -116,6 +119,7 @@ async def my_games(
         try:
             scoreboard = await scoreboard_service.get_scoreboard(league)
         except scoreboard_service.UpstreamUnavailableError:
+            logger.error("my-games failed: upstream unavailable league=%s", league)
             raise _upstream_unavailable(league) from None
         stale = stale or scoreboard.stale
         games.extend(
@@ -123,4 +127,12 @@ async def my_games(
             if any((league, c.team.id) in followed for c in g.competitors)
         )
     games.sort(key=lambda g: g.start_time)
+    trace.get_current_span().set_attributes(
+        {"matchday.follows": len(follows), "matchday.leagues": len(leagues),
+         "matchday.games": len(games), "matchday.stale": stale}
+    )
+    logger.info(
+        "my-games served follows=%d leagues=%s games=%d stale=%s",
+        len(follows), ",".join(leagues), len(games), stale,
+    )
     return MyGamesResponse(fetched_at=datetime.now(UTC), stale=stale, games=games)

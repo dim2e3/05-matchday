@@ -7,12 +7,13 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
+from opentelemetry.trace import Status, StatusCode
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import config, espn_client, scoreboard_service, telegram
-from .db import async_session_factory
+from . import config, espn_client, scoreboard_service, telegram, telemetry
+from .db import async_session_factory, engine
 from .models import Follow, GameSnapshot, Notification, TelegramChat
 from .notifier import detect_transition, format_message
 from .schemas import Game
@@ -90,11 +91,18 @@ async def process_game(db: AsyncSession, game: Game, now: datetime) -> int:
 
     if kind is None:
         return 0
-    created = await _enqueue(db, game, kind, await _recipients(db, game))
-    logger.info(
-        "game transition league=%s game=%s kind=%s enqueued=%d",
-        game.league, game.id, kind, created,
-    )
+    with telemetry.tracer.start_as_current_span(
+        "game transition",
+        attributes={"matchday.league": game.league, "matchday.game_id": game.id,
+                    "matchday.kind": kind},
+    ) as span:
+        created = await _enqueue(db, game, kind, await _recipients(db, game))
+        span.set_attribute("matchday.enqueued", created)
+        telemetry.notifications.add(created, {"kind": kind, "outcome": "enqueued"})
+        logger.info(
+            "game transition league=%s game=%s kind=%s enqueued=%d",
+            game.league, game.id, kind, created,
+        )
     return created
 
 
@@ -131,26 +139,41 @@ async def send_pending(limit: int = 50) -> int:
             .with_for_update(of=Notification, skip_locked=True)
         )
         for notification, chat_id in result.all():
+            kind = notification.kind
             if chat_id is None:
                 notification.status = "failed"  # user disconnected before delivery
+                telemetry.notifications.add(1, {"kind": kind, "outcome": "failed"})
                 continue
             notification.attempts += 1
-            try:
-                await telegram.send_message(chat_id, notification.text)
-            except telegram.TelegramError as exc:
-                logger.warning(
-                    "notification delivery failed id=%s attempt=%d: %s",
-                    notification.id, notification.attempts, exc,
+            with telemetry.tracer.start_as_current_span(
+                "notification send",
+                attributes={"matchday.notification_id": notification.id, "matchday.kind": kind,
+                            "matchday.attempt": notification.attempts},
+            ):
+                try:
+                    await telegram.send_message(chat_id, notification.text)
+                except telegram.TelegramError as exc:
+                    logger.warning(
+                        "notification delivery failed id=%s attempt=%d: %s",
+                        notification.id, notification.attempts, exc,
+                    )
+                    if notification.attempts >= config.SEND_MAX_ATTEMPTS:
+                        notification.status = "failed"
+                        telemetry.notifications.add(1, {"kind": kind, "outcome": "failed"})
+                    else:
+                        delay = config.SEND_BACKOFF_SECONDS[notification.attempts - 1]
+                        notification.next_attempt_at = now + timedelta(seconds=delay)
+                        telemetry.notifications.add(1, {"kind": kind, "outcome": "retry"})
+                    continue
+                notification.status = "sent"
+                notification.sent_at = datetime.now(UTC)
+                telemetry.notifications.add(1, {"kind": kind, "outcome": "sent"})
+                telemetry.notification_latency.record(
+                    (notification.sent_at - _as_aware(notification.created_at)).total_seconds(),
+                    {"kind": kind},
                 )
-                if notification.attempts >= config.SEND_MAX_ATTEMPTS:
-                    notification.status = "failed"
-                else:
-                    delay = config.SEND_BACKOFF_SECONDS[notification.attempts - 1]
-                    notification.next_attempt_at = now + timedelta(seconds=delay)
-                continue
-            notification.status = "sent"
-            notification.sent_at = datetime.now(UTC)
-            sent += 1
+                logger.info("notification sent id=%s kind=%s", notification.id, kind)
+                sent += 1
         await db.commit()
     return sent
 
@@ -178,20 +201,31 @@ async def _telegram_loop() -> None:
             await asyncio.sleep(5)
 
 
+async def run_cycle() -> None:
+    """One traced worker cycle: poll ESPN, then deliver due notifications."""
+    with telemetry.tracer.start_as_current_span("worker cycle") as span:
+        try:
+            enqueued = await poll_once()
+            sent = await send_pending()
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+            telemetry.worker_cycles.add(1, {"outcome": "error"})
+            logger.exception("worker cycle failed")
+            return
+        span.set_attributes({"matchday.enqueued": enqueued, "matchday.sent": sent})
+        telemetry.worker_cycles.add(1, {"outcome": "ok"})
+
+
 async def _main_loop() -> None:
     while True:
-        try:
-            await poll_once()
-            await send_pending()
-        except espn_client.EspnClientError as exc:
-            logger.warning("poll cycle failed: %s", exc)
-        except Exception:
-            logger.exception("poll cycle crashed")
+        await run_cycle()
         await asyncio.sleep(config.POLL_INTERVAL_SECONDS)
 
 
 async def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    telemetry.setup("matchday-worker")
+    telemetry.instrument_db(engine)
     logger.info("worker started poll_interval=%ss", config.POLL_INTERVAL_SECONDS)
     tasks = [_main_loop()]
     if config.TELEGRAM_MODE == "polling" and config.TELEGRAM_BOT_TOKEN:

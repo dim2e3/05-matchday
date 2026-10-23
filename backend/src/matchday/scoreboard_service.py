@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime
 
-from . import config, espn_client
+from . import config, espn_client, telemetry
 from .cache import TTLCache
 from .normalizer import normalize_teams, parse_scoreboard
 from .schemas import ScoreboardResponse, TeamInfo
@@ -33,6 +33,15 @@ async def get_scoreboard(league: str) -> ScoreboardResponse:
     try:
         raw = await espn_client.fetch_raw_scoreboard(league)
         result = parse_scoreboard(raw, league)
+        telemetry.scoreboard_events.add(len(result.games), {"league": league, "outcome": "parsed"})
+        if result.dropped:
+            telemetry.scoreboard_events.add(
+                result.dropped, {"league": league, "outcome": "dropped"}
+            )
+            logger.warning(
+                "scoreboard parse dropped events league=%s dropped=%d parsed=%d",
+                league, result.dropped, len(result.games),
+            )
         if result.dropped and not result.games:
             raise UpstreamSchemaError(
                 f"All {result.dropped} {league} events failed to parse"

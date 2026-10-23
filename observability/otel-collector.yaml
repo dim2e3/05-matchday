@@ -1,4 +1,4 @@
-# The app sends all three signals here over OTLP; the Collector fans them out.
+# api and worker send all three signals here over OTLP; the Collector fans them out.
 receivers:
   otlp:
     protocols:
@@ -9,15 +9,30 @@ receivers:
 
 processors:
   batch: {}
+  # Defense in depth for the privacy rule in AGENTS.md: the app never records these, but if
+  # an instrumentation upgrade starts to, scrub them before they are stored.
+  transform/redact:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - replace_pattern(attributes["url.full"], "/bot[^/]+/", "/bot<redacted>/")
+          - replace_pattern(attributes["http.url"], "/bot[^/]+/", "/bot<redacted>/")
+          - delete_key(attributes, "http.request.header.cookie")
+          - delete_key(attributes, "http.request.header.x_telegram_bot_api_secret_token")
+    log_statements:
+      - context: log
+        statements:
+          - replace_pattern(body, "/bot[^/ ]+/", "/bot<redacted>/")
 
 exporters:
   # Prometheus ingests OTLP metrics natively (--web.enable-otlp-receiver).
-  otlp_http/prometheus:
+  otlphttp/prometheus:
     metrics_endpoint: http://prometheus:9090/api/v1/otlp/v1/metrics
   # Loki ingests OTLP logs natively; trace_id/span_id become structured metadata.
-  otlp_http/loki:
+  otlphttp/loki:
     logs_endpoint: http://loki:3100/otlp/v1/logs
-  otlp_grpc/tempo:
+  otlp/tempo:
     endpoint: tempo:4317
     tls:
       insecure: true
@@ -32,12 +47,12 @@ service:
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp_http/prometheus]
+      exporters: [otlphttp/prometheus]
     logs:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [otlp_http/loki]
+      processors: [transform/redact, batch]
+      exporters: [otlphttp/loki]
     traces:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [otlp_grpc/tempo]
+      processors: [transform/redact, batch]
+      exporters: [otlp/tempo]

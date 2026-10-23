@@ -84,6 +84,21 @@ jobs:
           ssh "$TARGET" 'cd /opt/matchday/edge && docker compose -p matchday-edge -f compose.edge.yaml up -d --wait \
             && docker compose -p matchday-edge -f compose.edge.yaml exec -T caddy caddy reload --config /etc/caddy/Caddyfile'
 
+      - name: Telemetry stack (matchday-ops) up to date
+        env:
+          TARGET: ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          ALERT_WEBHOOK_TOKEN: ${{ secrets.ALERT_WEBHOOK_TOKEN }}
+        run: |
+          printf 'GRAFANA_HOST=%s\nGRAFANA_ADMIN_PASSWORD=%s\nALERT_WEBHOOK_TOKEN=%s\nGITHUB_REPOSITORY=%s\n' \
+            "${{ vars.GRAFANA_HOST }}" "$GRAFANA_ADMIN_PASSWORD" "$ALERT_WEBHOOK_TOKEN" \
+            "${{ github.repository }}" > ops.env
+          rsync -a --delete -e ssh observability/ "$TARGET:/opt/matchday/ops/observability/"
+          scp -q deploy/compose.ops.override.yaml "$TARGET:/opt/matchday/ops/observability/"
+          scp -q ops.env "$TARGET:/opt/matchday/ops/observability/.env"
+          ssh "$TARGET" 'cd /opt/matchday/ops/observability && chmod 600 .env && \
+            docker compose -p matchday-ops -f compose.yaml -f compose.ops.override.yaml up -d --wait --remove-orphans'
+
       - name: Ship files and deploy
         env:
           TARGET: ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}

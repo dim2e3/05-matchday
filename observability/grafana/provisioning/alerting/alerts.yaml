@@ -1,59 +1,133 @@
+# Alerts on user impact, not resources. Each rule is grouped by environment so dev and
+# prod incidents are separate, and carries what the on-call agent needs: endpoint, window,
+# a runbook section and a dashboard link.
 apiVersion: 1
+
+deleteRules:
+  - orgId: 1
+    uid: order-lookup-5xx # inherited from the module 04 starter
 
 groups:
   - orgId: 1
-    name: order-tracker
-    folder: Order Tracker
+    name: matchday-user-impact
+    folder: MatchDay
     interval: 30s
     rules:
-      - uid: order-lookup-5xx
-        title: Order lookup 5xx errors
+      - uid: matchday-my-games-5xx
+        title: Fans can't load live scores
         condition: C
         data:
-          # 5xx responses per endpoint over the last 5 minutes.
           - refId: A
-            relativeTimeRange:
-              from: 300
-              to: 0
+            relativeTimeRange: { from: 300, to: 0 }
             datasourceUid: prometheus
             model:
               refId: A
               instant: true
               expr: >-
-                sum by (http_route) (increase(order_lookup_requests_total{service_name="order-tracker",http_response_status_code=~"5.."}[5m]))
+                sum by (deployment_environment) (increase(http_server_request_duration_seconds_count{
+                service_name="matchday-api", http_route="/api/my-games", http_response_status_code=~"5.."}[5m]))
           - refId: B
             datasourceUid: __expr__
-            model:
-              refId: B
-              type: reduce
-              expression: A
-              reducer: last
-              settings:
-                mode: dropNN
+            model: { refId: B, type: reduce, expression: A, reducer: last, settings: { mode: dropNN } }
           - refId: C
             datasourceUid: __expr__
             model:
               refId: C
               type: threshold
               expression: B
-              conditions:
-                - evaluator:
-                    type: gt
-                    params: [0]
-        # No 5xx series yet (e.g. right after a restart) means no server errors.
+              conditions: [{ evaluator: { type: gt, params: [0] } }]
+        noDataState: OK # no 5xx series yet means no server errors
+        execErrState: Error
+        for: 0s
+        labels: { service: matchday-api, severity: critical, journey: my-games }
+        annotations:
+          summary: "Fans can't load live scores ({{ $labels.deployment_environment }})"
+          description: >-
+            {{ printf "%.0f" $values.B.Value }} 5xx response(s) on GET /api/my-games in the
+            last 5 minutes. Fans see an error instead of their teams' scores.
+          endpoint: GET /api/my-games
+          window: 5m
+          runbook: docs/runbook.md#fans-cant-load-live-scores
+          dashboard_url: /d/matchday/matchday?var-env={{ $labels.deployment_environment }}
+          __dashboardUid__: matchday
+          __panelId__: "1"
+
+      - uid: matchday-scoreboard-drift
+        title: ESPN scoreboard schema drift
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              # Share of ESPN events the normalizer could not parse, per league.
+              expr: >-
+                sum by (deployment_environment, league) (increase(matchday_scoreboard_events_total{outcome="dropped"}[5m]))
+                / clamp_min(sum by (deployment_environment, league) (increase(matchday_scoreboard_events_total[5m])), 1)
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last, settings: { mode: dropNN } }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [{ evaluator: { type: gt, params: [0.2] } }]
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        labels: { service: matchday, severity: critical, journey: my-games }
+        annotations:
+          summary: "ESPN {{ $labels.league }} games can't be parsed ({{ $labels.deployment_environment }})"
+          description: >-
+            {{ humanizePercentage $values.B.Value }} of {{ $labels.league }} scoreboard events
+            were dropped by the normalizer in the last 5 minutes. Fans following
+            {{ $labels.league }} teams see stale or missing scores and get no notifications.
+            Likely an ESPN response schema change: see backend/src/matchday/normalizer.py.
+          endpoint: ESPN scoreboard ({{ $labels.league }}) → GET /api/my-games, worker
+          window: 5m
+          runbook: docs/runbook.md#espn-scoreboard-schema-drift
+          dashboard_url: /d/matchday/matchday?var-env={{ $labels.deployment_environment }}
+          __dashboardUid__: matchday
+          __panelId__: "3"
+
+      - uid: matchday-notifications-failing
+        title: Telegram notifications failing
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (deployment_environment) (increase(matchday_notifications_total{outcome=~"failed|retry"}[10m]))
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last, settings: { mode: dropNN } }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions: [{ evaluator: { type: gt, params: [0] } }]
         noDataState: OK
         execErrState: Error
         for: 0s
-        labels:
-          service: order-tracker
-          severity: critical
+        labels: { service: matchday-worker, severity: warning, journey: notifications }
         annotations:
-          summary: "Order lookups are returning 5xx errors"
+          summary: "Telegram notifications failing ({{ $labels.deployment_environment }})"
           description: >-
-            {{ printf "%.0f" $values.B.Value }} 5xx response(s) on GET {{ $labels.http_route }}
-            in the last 5 minutes.
-          endpoint: "GET {{ $labels.http_route }}"
-          window: 5m
-          dashboard_url: http://localhost:3000/d/order-tracker/order-tracker?orgId=1&viewPanel=6
-          __dashboardUid__: order-tracker
-          __panelId__: "6"
+            {{ printf "%.0f" $values.B.Value }} notification delivery failure(s)/retries in the
+            last 10 minutes. Fans miss kickoff/final messages.
+          endpoint: worker → Telegram sendMessage
+          window: 10m
+          runbook: docs/runbook.md#telegram-notifications-failing
+          dashboard_url: /d/matchday/matchday?var-env={{ $labels.deployment_environment }}
+          __dashboardUid__: matchday
+          __panelId__: "5"

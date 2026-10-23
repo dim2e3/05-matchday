@@ -45,8 +45,8 @@ datasources:
           - key: service.name
             value: service_name
         queries:
-          - name: Lookup requests
-            query: sum by (http_response_status_code) (rate(order_lookup_requests_total{$$__tags}[5m]))
+          - name: Requests by route and status
+            query: sum by (http_route, http_response_status_code) (rate(http_server_request_duration_seconds_count{$$__tags}[5m]))
       serviceMap:
         datasourceUid: prometheus
       nodeGraph:

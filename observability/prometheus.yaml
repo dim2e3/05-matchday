@@ -5,6 +5,7 @@ global:
 otlp:
   promote_resource_attributes:
     - service.name
+    - deployment.environment
 
 storage:
   tsdb:

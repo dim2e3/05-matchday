@@ -2,21 +2,23 @@ apiVersion: 1
 
 contactPoints:
   - orgId: 1
-    name: incident-responder
+    name: oncall-agent
     receivers:
-      - uid: incident-responder-webhook
+      - uid: alert-bridge-webhook
         type: webhook
         settings:
-          # The responder runs on the host (see incident-response/README.md).
-          url: http://host.docker.internal:8001/alerts
+          # alert-bridge collects telemetry context and wakes the on-call agent (docs/runbook.md).
+          url: ${ALERT_WEBHOOK_URL}
           httpMethod: POST
+          authorization_scheme: Bearer
+          authorization_credentials: ${ALERT_WEBHOOK_TOKEN}
         disableResolveMessage: false
 
 policies:
   - orgId: 1
-    receiver: incident-responder
-    group_by: ["grafana_folder", "alertname", "http_route"]
+    receiver: oncall-agent
+    group_by: ["grafana_folder", "alertname", "deployment_environment", "league"]
     group_wait: 10s
     group_interval: 1m
-    # One investigation per incident; Grafana re-sends a still-firing alert only after this.
+    # One investigation per incident; a still-firing alert is re-sent only after this.
     repeat_interval: 4h

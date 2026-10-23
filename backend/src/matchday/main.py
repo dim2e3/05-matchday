@@ -5,9 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from . import config, espn_client, telegram
-from .db import async_session_factory, create_all
+from . import config, espn_client, telegram, telemetry
+from .db import async_session_factory, create_all, engine
 from .routers import account, follows, scoreboard
+
+telemetry.setup("matchday-api")
+telemetry.instrument_db(engine)
 
 
 @asynccontextmanager
@@ -28,6 +31,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+telemetry.instrument_app(app)
 
 app.include_router(scoreboard.router)
 app.include_router(follows.router)

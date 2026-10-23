@@ -1,6 +1,6 @@
 import httpx
 
-from . import config
+from . import config, telemetry
 
 
 class EspnClientError(Exception):
@@ -17,6 +17,7 @@ def get_client() -> httpx.AsyncClient:
             timeout=config.ESPN_TIMEOUT_SECONDS,
             headers={"User-Agent": config.ESPN_USER_AGENT},
         )
+        telemetry.instrument_http_client(_client)
     return _client
 
 
@@ -35,6 +36,17 @@ def _league_url(league: str, resource: str) -> str:
 
 
 async def _fetch(league: str, resource: str) -> dict:
+    attrs = {"league": league, "resource": resource}
+    try:
+        result = await _fetch_raw(league, resource)
+    except EspnClientError:
+        telemetry.espn_requests.add(1, {**attrs, "outcome": "error"})
+        raise
+    telemetry.espn_requests.add(1, {**attrs, "outcome": "ok"})
+    return result
+
+
+async def _fetch_raw(league: str, resource: str) -> dict:
     url = _league_url(league, resource)
     client = get_client()
     try:

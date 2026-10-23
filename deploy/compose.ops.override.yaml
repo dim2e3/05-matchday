@@ -1,0 +1,23 @@
+# EC2 overrides for observability/compose.yaml, run from /opt/matchday/ops as project
+# "matchday-ops":  docker compose -f compose.yaml -f compose.ops.override.yaml up -d
+# - apps reach the collector over the external "ops" network
+# - Caddy reaches Grafana over "edge"; Grafana requires a login (no anonymous admin)
+services:
+  otel-collector:
+    networks: [default, ops]
+  grafana:
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set in .env}
+      GF_SERVER_ROOT_URL: https://${GRAFANA_HOST}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    networks: [default, edge]
+  prometheus:
+    ports: !reset []
+
+networks:
+  ops:
+    external: true
+  edge:
+    external: true

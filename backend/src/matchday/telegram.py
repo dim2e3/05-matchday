@@ -5,10 +5,11 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 import httpx
+from opentelemetry.trace import SpanKind, Status, StatusCode
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import config
+from . import config, telemetry
 from .models import TelegramChat, TelegramLink
 
 logger = logging.getLogger(__name__)
@@ -40,18 +41,25 @@ def _method_url(method: str) -> str:
 
 
 async def call(method: str, payload: dict, timeout: float | None = None) -> dict:
-    try:
-        kwargs = {"timeout": timeout} if timeout is not None else {}
-        response = await get_client().post(_method_url(method), json=payload, **kwargs)
-        body = response.json()
-    except (httpx.HTTPError, ValueError) as exc:
-        # The URL contains the bot token; never include it in the error text.
-        raise TelegramError(f"{method} failed: {type(exc).__name__}") from exc
-    if not body.get("ok"):
-        raise TelegramError(
-            f"{method} rejected: {response.status_code} {body.get('description', '')}"
-        )
-    return body.get("result", {})
+    # Manual span: method name only. Never the URL (bot token) or payload (chat id).
+    with telemetry.tracer.start_as_current_span(
+        f"telegram {method}", kind=SpanKind.CLIENT, attributes={"telegram.method": method}
+    ) as span:
+        try:
+            kwargs = {"timeout": timeout} if timeout is not None else {}
+            response = await get_client().post(_method_url(method), json=payload, **kwargs)
+            body = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            # The URL contains the bot token; never include it in the error text.
+            span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+            raise TelegramError(f"{method} failed: {type(exc).__name__}") from exc
+        span.set_attribute("http.response.status_code", response.status_code)
+        if not body.get("ok"):
+            span.set_status(Status(StatusCode.ERROR, "rejected"))
+            raise TelegramError(
+                f"{method} rejected: {response.status_code} {body.get('description', '')}"
+            )
+        return body.get("result", {})
 
 
 async def send_message(chat_id: int, text: str) -> None:

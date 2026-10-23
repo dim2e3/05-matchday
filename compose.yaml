@@ -2,6 +2,9 @@
 # The telemetry stack is added in observability/compose.yaml (included below).
 name: matchday
 
+include:
+  - observability/compose.yaml
+
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+asyncpg://matchday:${POSTGRES_PASSWORD:-matchday}@postgres:5432/matchday
   ESPN_BASE_URL: ${ESPN_BASE_URL:-http://fake-espn:8000/apis/site/v2/sports}
@@ -14,6 +17,9 @@ x-backend-env: &backend-env
   # Short intervals locally so demos and e2e react within seconds.
   POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-3}
   SCOREBOARD_CACHE_TTL_SECONDS: ${SCOREBOARD_CACHE_TTL_SECONDS:-2}
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  OTEL_METRIC_EXPORT_INTERVAL: "5000"
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=local
 
 services:
   postgres:
