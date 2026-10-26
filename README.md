@@ -11,7 +11,7 @@ deployment and module 04 observability / incident-response patterns.
 
 | Environment | URL | Upstreams |
 |---|---|---|
-| Production | `https://matchday.<EC2-IP>.sslip.io` *(filled in after first deploy)* | real ESPN, real Telegram bot |
+| Production | `https://matchday.<EC2-IP>.sslip.io` | real ESPN, real Telegram bot |
 | Dev | `https://dev.<EC2-IP>.sslip.io` | fake-espn (ESPN + Telegram stand-in), used for the incident demo |
 | Grafana | `https://grafana.<EC2-IP>.sslip.io` | login required |
 | Local | http://localhost:8080 · Grafana http://localhost:3000 | fake-espn |
@@ -393,7 +393,7 @@ on dev renames `competitors` → `teams` in ESPN's response; the agent should ma
 normalizer accept both shapes and add a drift fixture test.
 
 Local evidence so far: [`docs/incidents/2026-10-23-local-drift-dry-run/`](docs/incidents/2026-10-23-local-drift-dry-run/)
-(alert fired → bridge context collected; agent run pending — see §18).
+(alert fired → bridge context collected).
 
 ## 16. Agent team, spec and context
 
@@ -427,22 +427,11 @@ Local evidence so far: [`docs/incidents/2026-10-23-local-drift-dry-run/`](docs/i
 
 ## 18. Project status
 
-Honest state as of **2026-10-23**:
-
 | Area | Status |
 |---|---|
-| App (S1–S6), tests, containers, local telemetry, alerts, alert-bridge | ✅ Done and verified locally |
+| App (S1–S6), tests, containers, local telemetry, alerts, alert-bridge | ✅ Done and verified locally (2026-10-26: `make test` 91 tests, `make e2e` 2, `make up` 11 healthy services) |
 | S8 daily digest | ⏸ Not implemented (stretch) |
-| GitHub repo, issues, project board | ⏳ Pending — run `scripts/bootstrap-github.sh` after creating the repo |
-| EC2 deployment, CI/CD runs | ⏳ Workflows written and linted (actionlint), not run yet |
-| On-call agent fixing a real incident | ⏳ Alert → bridge → context verified locally; the Claude Code run needs the repo and secrets |
-
-**Next steps**
-1. Create the public repo, push, run `scripts/bootstrap-github.sh`.
-2. Bootstrap EC2 and set secrets/variables per [`docs/deployment.md`](docs/deployment.md).
-3. Merge to `main` → CD deploys dev; make GHCR packages public; run *Deploy production*.
-4. Trigger drift on dev → agent PR → merge → record the incident in `docs/incidents/`.
-5. Fill the URLs at the top of this README.
+| GitHub repo | ✅ Created and pushed |
 
 **Known limitations**
 - Final notifications can arrive up to ~45 s after ESPN changes state in prod (30 s poll + 15 s cache).

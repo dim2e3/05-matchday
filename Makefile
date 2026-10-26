@@ -30,6 +30,7 @@ test-backend-pg:
 	  status=$$?; docker rm -f md-pg-test >/dev/null; exit $$status
 
 test-frontend:
+	npm --prefix frontend ci
 	npm --prefix frontend test
 
 lint:
